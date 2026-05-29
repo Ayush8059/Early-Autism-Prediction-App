@@ -113,29 +113,3 @@ build\app\outputs\flutter-apk\app-release.apk
 ```
 
 You can copy this APK to an Android phone and install it manually. The phone may ask to allow installation from unknown sources.
-
-## Security Notes
-
-Do not push these to GitHub:
-
-- `dev_defines.json`
-- `.env`
-- Supabase service-role key
-- ML API key
-- SMTP/API keys
-- hCaptcha secret key
-- Android keystore files
-- ML model files like `.h5`
-
-The Supabase anon key is public, but the database must still be protected with RLS policies.
-
-## GitHub
-
-Before pushing changes:
-
-```powershell
-git status
-git status --ignored
-```
-
-Make sure secret files are ignored before committing.
