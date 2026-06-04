@@ -6,6 +6,7 @@ const corsHeaders = {
 };
 
 const maxImageBytes = 5 * 1024 * 1024;
+const maxBase64Chars = Math.ceil(maxImageBytes * 1.37);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -26,6 +27,9 @@ Deno.serve(async (req) => {
     if (!mlBackendUrl || !mlApiKey) {
       return json({ error: 'ML backend is not configured.' }, 503);
     }
+    if (!supabaseUrl || !anonKey) {
+      return json({ error: 'Supabase auth is not configured.' }, 500);
+    }
 
     const supabase = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -39,6 +43,9 @@ Deno.serve(async (req) => {
     const { imageBase64 } = await req.json();
     if (typeof imageBase64 !== 'string' || imageBase64.length === 0) {
       return json({ error: 'imageBase64 is required.' }, 400);
+    }
+    if (imageBase64.length > maxBase64Chars) {
+      return json({ error: 'Image is too large. Maximum allowed size is 5 MB.' }, 413);
     }
 
     const imageBytes = decodeBase64Image(imageBase64);
@@ -56,11 +63,12 @@ Deno.serve(async (req) => {
       `user-${userData.user.id}.jpg`,
     );
 
-    const endpoint = `${mlBackendUrl.replace(/\/$/, '')}/predict`;
+    const endpoint = predictionEndpoint(mlBackendUrl);
     const mlResponse = await fetch(endpoint, {
       method: 'POST',
       headers: { 'x-ml-api-key': mlApiKey },
       body: formData,
+      signal: AbortSignal.timeout(65000),
     });
 
     const responseText = await mlResponse.text();
@@ -72,7 +80,7 @@ Deno.serve(async (req) => {
     }
 
     if (!mlResponse.ok) {
-      return json({ error: 'ML backend failed.', detail: responseBody }, mlResponse.status);
+      return json({ error: 'ML backend failed.', detail: safeBackendDetail(responseBody) }, mlResponse.status);
     }
 
     return json(responseBody);
@@ -80,6 +88,24 @@ Deno.serve(async (req) => {
     return json({ error: String(error) }, 500);
   }
 });
+
+function predictionEndpoint(url: string) {
+  const clean = url.trim().replace(/\/$/, '');
+  return clean.endsWith('/predict') ? clean : `${clean}/predict`;
+}
+
+function safeBackendDetail(value: unknown) {
+  if (value && typeof value === 'object' && 'detail' in value) {
+    const detail = (value as { detail?: unknown }).detail;
+    return typeof detail === 'string' ? detail.slice(0, 300) : 'Backend rejected the request.';
+  }
+  if (value && typeof value === 'object' && 'error' in value) {
+    const error = (value as { error?: unknown }).error;
+    return typeof error === 'string' ? error.slice(0, 300) : 'Backend rejected the request.';
+  }
+  if (typeof value === 'string') return value.slice(0, 300);
+  return 'Backend rejected the request.';
+}
 
 function decodeBase64Image(value: string) {
   const clean = value.includes(',') ? value.split(',').pop() ?? '' : value;

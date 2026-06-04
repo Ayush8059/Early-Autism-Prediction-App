@@ -82,9 +82,17 @@ Add these secrets in Supabase, not in Flutter:
 
 ```powershell
 supabase secrets set ML_BACKEND_URL=https://YOUR_ML_BACKEND_URL
-supabase secrets set MLAPIKEY=YOUR_PRIVATE_ML_API_KEY
+supabase secrets set ML_API_KEY=YOUR_PRIVATE_ML_API_KEY
 supabase secrets set SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
 ```
+
+For the current Hugging Face backend, use:
+
+```powershell
+supabase secrets set ML_BACKEND_URL=https://yolo8059-autisense-ml-backend.hf.space
+```
+
+Keep `ML_API_KEY` only in Supabase secrets and Hugging Face secrets. Do not pass it with Flutter `--dart-define` or put it in the APK.
 
 ## ML Backend
 

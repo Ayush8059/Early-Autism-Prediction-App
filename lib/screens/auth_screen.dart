@@ -97,16 +97,23 @@ class _AuthScreenState extends State<AuthScreen>
         final captchaToken = await _captchaTokenOrAbort();
         if (SupabaseConfig.isCaptchaEnabled && captchaToken == null) return;
 
-        await authService.signUp(
+        final response = await authService.signUp(
           email: _emailController.text,
           password: _passwordController.text,
           fullName: _nameController.text,
           captchaToken: captchaToken,
         );
         await _forgetDeletedEmailForSignup();
-        _showMessage(
-          'Account created. You can log in now.',
-        );
+        if (response.session == null) {
+          _showEmailConfirmationNeeded();
+          setState(() {
+            _isSignUp = false;
+            _showPasswordRules = false;
+            _passwordController.clear();
+          });
+        } else {
+          _showMessage('Account created. You are signed in.');
+        }
       } else {
         await _signInWithCaptchaOnlyWhenNeeded(authService);
       }
@@ -129,7 +136,11 @@ class _AuthScreenState extends State<AuthScreen>
         );
       }
     } on AuthException catch (error) {
-      _showMessage(_friendlyAuthMessage(error));
+      if (_isEmailNotConfirmedError(error)) {
+        _showEmailConfirmationNeeded();
+      } else {
+        _showMessage(_friendlyAuthMessage(error));
+      }
     } catch (_) {
       _showMessage('Something went wrong. Please try again.');
     } finally {
@@ -170,8 +181,14 @@ class _AuthScreenState extends State<AuthScreen>
     final message = error.message.toLowerCase();
     return message.contains('invalid login credentials') ||
         message.contains('invalid credentials') ||
-        message.contains('email not confirmed') ||
         message.contains('invalid email or password');
+  }
+
+  bool _isEmailNotConfirmedError(AuthException error) {
+    final message = error.message.toLowerCase();
+    return message.contains('email not confirmed') ||
+        message.contains('confirm your email') ||
+        message.contains('email confirmation');
   }
 
   String _friendlyAuthMessage(AuthException error) {
@@ -274,6 +291,35 @@ class _AuthScreenState extends State<AuthScreen>
     }
   }
 
+  Future<void> _resendConfirmationEmail() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      _showMessage('Enter your email first.');
+      return;
+    }
+
+    final authService = _authService;
+    if (authService == null) {
+      _showMessage('Supabase is not configured yet.');
+      return;
+    }
+
+    try {
+      final captchaToken = await _captchaTokenOrAbort();
+      if (SupabaseConfig.isCaptchaEnabled && captchaToken == null) return;
+
+      await authService.resendSignupConfirmation(
+        email: email,
+        captchaToken: captchaToken,
+      );
+      _showMessage('Confirmation email sent again. Please check inbox/spam.');
+    } on AuthException catch (error) {
+      _showMessage(error.message);
+    } catch (_) {
+      _showMessage('Could not resend confirmation email. Please try again.');
+    }
+  }
+
   Future<String?> _captchaTokenOrAbort() async {
     if (!SupabaseConfig.isCaptchaEnabled) return null;
 
@@ -296,6 +342,22 @@ class _AuthScreenState extends State<AuthScreen>
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _showEmailConfirmationNeeded() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'Account created. Please confirm your email, then log in.',
+        ),
+        duration: const Duration(seconds: 7),
+        action: SnackBarAction(
+          label: 'Resend',
+          onPressed: _resendConfirmationEmail,
+        ),
+      ),
+    );
   }
 
   @override

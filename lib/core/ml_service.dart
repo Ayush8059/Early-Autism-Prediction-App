@@ -26,7 +26,6 @@ class AnalysisResult {
 
 class MLService {
   static const String _apiUrl = String.fromEnvironment('ML_API_URL');
-  static const String _apiKey = String.fromEnvironment('ML_API_KEY');
 
   /// TODO: Integrate your actual ML model here.
   /// If using an API: Make an http.post request with the image file.
@@ -100,9 +99,6 @@ class MLService {
 
   static Future<AnalysisResult> _analyzeWithApi(Uint8List imageBytes) async {
     final request = http.MultipartRequest('POST', Uri.parse(_apiUrl));
-    if (_apiKey.trim().isNotEmpty) {
-      request.headers['X-ML-API-Key'] = _apiKey;
-    }
     request.files.add(
       http.MultipartFile.fromBytes(
         'file',
@@ -162,7 +158,7 @@ class MLService {
   static String _friendlyApiError(Object error) {
     final text = error.toString();
     if (text.contains('Invalid ML API key') || text.contains('401')) {
-      return 'ML API key mismatch. Use the same ML_API_KEY in the Python backend and Flutter run command.';
+      return 'The secure ML server rejected the request. Please check the Supabase ML_API_KEY secret.';
     }
     if (text.contains('Upload a JPG or PNG') || text.contains('400')) {
       return 'The backend rejected the uploaded photo. Please choose a JPG or PNG image and try again.';
@@ -173,7 +169,7 @@ class MLService {
     if (text.contains('Prediction failed') || text.contains('500')) {
       return text.replaceFirst('Bad state: ', '');
     }
-    return 'The ML backend could not be reached. Keep uvicorn running on port 8000 and run Flutter with ML_API_URL.';
+    return 'The secure ML backend could not be reached. Please check the Supabase photo-analysis function and Hugging Face Space.';
   }
 
   /// Calculates risk based on Q1-Q12 assessment score.
